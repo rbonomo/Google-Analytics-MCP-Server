@@ -1,0 +1,37 @@
+@model GoogleAnalyticsMcp.Controllers.StatusViewModel
+@{
+    ViewData["Title"] = "Status";
+}
+
+<h1>Google Analytics MCP Server</h1>
+
+<section>
+    <table>
+        <tr><th>MCP endpoint</th><td><code>@Model.EndpointUrl</code> (Streamable HTTP)</td></tr>
+        <tr>
+            <th>Endpoint protection</th>
+            <td>
+                @if (Model.ApiKeyProtected)
+                {
+                    <span class="ok">API key required</span>
+                }
+                else
+                {
+                    <span class="warn">Open - configure Mcp:ApiKeys before deploying</span>
+                }
+            </td>
+        </tr>
+        <tr><th>Google credentials</th><td>@Model.CredentialSource</td></tr>
+        <tr><th>Default property</th><td>@(string.IsNullOrWhiteSpace(Model.DefaultPropertyId) ? "(none)" : Model.DefaultPropertyId)</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>Tools</h2>
+    <table>
+        @foreach (var tool in Model.Tools)
+        {
+            <tr><th><code>@tool.Name</code></th><td>@tool.Description</td></tr>
+        }
+    </table>
+</section>
