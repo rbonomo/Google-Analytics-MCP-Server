@@ -4,6 +4,9 @@ A read-only [Model Context Protocol](https://modelcontextprotocol.io) server for
 ASP.NET Core (.NET 10) with the official C# MCP SDK. It exposes a Streamable HTTP endpoint at `/mcp` and is designed
 to be hosted on IIS. An MVC status page at `/` shows the endpoint URL, configuration state and the tool list.
 
+It can also run as a **local stdio process** (`--stdio`) that Claude Desktop or Claude Code launch themselves – no web
+server or deployment needed. See [Use it locally](#use-it-locally-claude-desktop--claude-code).
+
 ## Tools
 
 | Tool | What it does |
@@ -49,12 +52,19 @@ The server only requests the `analytics.readonly` scope.
 }
 ```
 
-- **CredentialsPath** – service account key file. Leave empty to use Application Default Credentials
-  (`GOOGLE_APPLICATION_CREDENTIALS`, `gcloud auth application-default login`, or GCP metadata server).
+- **CredentialsPath** – service account key file.
+- **CredentialsJson** – the key's contents instead of a file (raw JSON or base64). Takes precedence over the path.
+  If neither is set, Application Default Credentials are used (`GOOGLE_APPLICATION_CREDENTIALS`,
+  `gcloud auth application-default login`, or GCP metadata server).
 - **DefaultPropertyId** – used when a tool call omits `propertyId`. Optional.
 - **ApiKeys** – clients must send `Authorization: Bearer <key>` or `X-API-Key: <key>`. **If empty the endpoint is open**
   (a warning is logged and shown on the status page). Generate a key with
   `[Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))` in PowerShell.
+
+Short environment variable aliases are also read (handy for MCP client configs):
+`GA_SERVICE_ACCOUNT_JSON`, `GA_SERVICE_ACCOUNT_FILE`, `GA_PROPERTY_ID`.
+
+Calls use Google's REST transport rather than gRPC, so they work through HTTP proxies (`HTTPS_PROXY`).
 
 Keep secrets out of source control: on the server, prefer environment variables set in `web.config`
 (`<environmentVariables>`) or the app pool, and store the JSON key outside the site folder.
@@ -68,6 +78,43 @@ dotnet run
 
 Test with the MCP Inspector: `npx @modelcontextprotocol/inspector` → transport *Streamable HTTP* →
 URL `http://localhost:5163/mcp` → add header `Authorization: Bearer <key>`.
+
+## Use it locally (Claude Desktop / Claude Code)
+
+In stdio mode the client starts the server as a child process; nothing listens on the network and no API key is needed.
+
+**Claude Desktop (Windows)** – `dotnet publish -c Release -o C:\Tools\GoogleAnalyticsMcp`, then in
+*Settings → Developer → Edit Config* (`claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "google-analytics": {
+      "command": "dotnet",
+      "args": ["C:\\Tools\\GoogleAnalyticsMcp\\GoogleAnalyticsMcp.dll", "--stdio"],
+      "env": {
+        "GA_SERVICE_ACCOUNT_FILE": "C:\\secure\\ga-service-account.json",
+        "GA_PROPERTY_ID": "123456789"
+      }
+    }
+  }
+}
+```
+
+Restart Claude Desktop; the tools appear under the tools/connectors menu.
+
+**Claude Code (this repo)** – the repo ships a `.mcp.json` that runs `scripts/mcp-stdio.sh`, which installs the
+.NET 10 SDK if missing, builds, and starts the server with `--stdio`. Opening Claude Code in this folder loads the
+`google-analytics` server automatically (it is pre-approved in `.claude/settings.json`). Provide the key through
+environment variables:
+
+- `GA_SERVICE_ACCOUNT_JSON` – the service account key, as single-line JSON or base64
+  (`base64 -w0 key.json`, or `[Convert]::ToBase64String([IO.File]::ReadAllBytes("key.json"))` in PowerShell)
+- `GA_PROPERTY_ID` – optional default property
+
+For **Claude Code on the web**, add those two variables in the cloud environment's settings (environment menu in the
+session title bar → Edit → environment variables) and start a new session on this repository. A SessionStart hook
+pre-builds the server so it is ready when the session opens.
 
 ## 4. Deploy to IIS
 
@@ -119,7 +166,7 @@ Example prompts: *"Which channels drove the most sessions last month vs. the mon
 ## Project layout
 
 ```
-Program.cs                      Host setup: MCP server (stateless HTTP), API key middleware, MVC
+Program.cs                      Host setup: stdio mode, or MCP over stateless HTTP + API key middleware + MVC
 Options/GoogleAnalyticsOptions  Strongly typed settings (GoogleAnalytics, Mcp sections)
 Services/GoogleAnalyticsClients Credential loading + cached Data/Admin API clients
 Services/ToolHelpers            JSON output, filter parsing, report flattening, error mapping
@@ -128,4 +175,6 @@ Tools/AdminTools                Account, property, custom definition and Ads lin
 Tools/ReportingTools            run_report, run_realtime_report, get_metadata
 Controllers + Views             Status page
 web.config                      IIS (ASP.NET Core Module V2, in-process)
+.mcp.json, scripts/mcp-stdio.sh Claude Code project config + stdio launcher (installs .NET and builds on first run)
+.claude/settings.json           Pre-approves the project MCP server; SessionStart hook pre-builds in cloud sessions
 ```

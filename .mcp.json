@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "google-analytics": {
+      "type": "stdio",
+      "command": "bash",
+      "args": ["scripts/mcp-stdio.sh"]
+    }
+  }
+}

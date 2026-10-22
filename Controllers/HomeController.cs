@@ -21,9 +21,11 @@ public class HomeController(IOptions<GoogleAnalyticsOptions> gaOptions, IOptions
         {
             EndpointUrl = $"{Request.Scheme}://{Request.Host}{Request.PathBase}{mcp.Path}",
             ApiKeyProtected = mcp.ApiKeys.Any(k => !string.IsNullOrWhiteSpace(k)),
-            CredentialSource = string.IsNullOrWhiteSpace(ga.CredentialsPath)
-                ? "Application Default Credentials"
-                : $"Service account key file ({(System.IO.File.Exists(ga.CredentialsPath) ? "found" : "NOT FOUND")})",
+            CredentialSource = !string.IsNullOrWhiteSpace(ga.CredentialsJson)
+                ? "Service account key from configuration (JSON)"
+                : string.IsNullOrWhiteSpace(ga.CredentialsPath)
+                    ? "Application Default Credentials"
+                    : $"Service account key file ({(System.IO.File.Exists(ga.CredentialsPath) ? "found" : "NOT FOUND")})",
             DefaultPropertyId = ga.DefaultPropertyId,
             Tools = typeof(HomeController).Assembly.GetTypes()
                 .Where(t => t.GetCustomAttribute<McpServerToolTypeAttribute>() is not null)

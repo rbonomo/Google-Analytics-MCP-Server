@@ -1,5 +1,7 @@
+using System.Text;
 using Google.Analytics.Admin.V1Beta;
 using Google.Analytics.Data.V1Beta;
+using Google.Api.Gax.Grpc.Rest;
 using Google.Apis.Auth.OAuth2;
 using GoogleAnalyticsMcp.Options;
 using Microsoft.Extensions.Options;
@@ -9,6 +11,8 @@ namespace GoogleAnalyticsMcp.Services;
 /// <summary>
 /// Lazily creates and caches the Google Analytics API clients. The gRPC clients are
 /// thread-safe and expensive to build, so one instance is shared for the app lifetime.
+/// They use the REST (HTTP/1.1 + JSON) transport rather than gRPC so calls work through
+/// HTTP proxies, which are common on corporate networks.
 /// </summary>
 public sealed class GoogleAnalyticsClients
 {
@@ -25,11 +29,13 @@ public sealed class GoogleAnalyticsClients
         _credential = new(LoadCredentialAsync);
         _dataClient = new(async () => await new BetaAnalyticsDataClientBuilder
         {
-            GoogleCredential = await _credential.GetAsync()
+            GoogleCredential = await _credential.GetAsync(),
+            GrpcAdapter = RestGrpcAdapter.Default,
         }.BuildAsync());
         _adminClient = new(async () => await new AnalyticsAdminServiceClientBuilder
         {
-            GoogleCredential = await _credential.GetAsync()
+            GoogleCredential = await _credential.GetAsync(),
+            GrpcAdapter = RestGrpcAdapter.Default,
         }.BuildAsync());
     }
 
@@ -69,9 +75,24 @@ public sealed class GoogleAnalyticsClients
 
     private async Task<GoogleCredential> LoadCredentialAsync()
     {
-        var credential = string.IsNullOrWhiteSpace(_options.CredentialsPath)
-            ? await GoogleCredential.GetApplicationDefaultAsync()
-            : (await CredentialFactory.FromFileAsync<ServiceAccountCredential>(_options.CredentialsPath, CancellationToken.None)).ToGoogleCredential();
+        GoogleCredential credential;
+        if (!string.IsNullOrWhiteSpace(_options.CredentialsJson))
+        {
+            var json = _options.CredentialsJson.Trim();
+            if (!json.StartsWith('{'))
+            {
+                json = Encoding.UTF8.GetString(Convert.FromBase64String(json));
+            }
+            credential = CredentialFactory.FromJson<ServiceAccountCredential>(json).ToGoogleCredential();
+        }
+        else if (!string.IsNullOrWhiteSpace(_options.CredentialsPath))
+        {
+            credential = (await CredentialFactory.FromFileAsync<ServiceAccountCredential>(_options.CredentialsPath, CancellationToken.None)).ToGoogleCredential();
+        }
+        else
+        {
+            credential = await GoogleCredential.GetApplicationDefaultAsync();
+        }
 
         return credential.CreateScoped(ReadOnlyScope);
     }

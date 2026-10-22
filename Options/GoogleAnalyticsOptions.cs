@@ -15,6 +15,12 @@ public sealed class GoogleAnalyticsOptions
     public string? CredentialsPath { get; set; }
 
     /// <summary>
+    /// Service account key contents, as raw JSON or base64-encoded JSON. Takes precedence
+    /// over <see cref="CredentialsPath"/>. Useful where only environment variables can be set.
+    /// </summary>
+    public string? CredentialsJson { get; set; }
+
+    /// <summary>
     /// Optional property used when a tool call omits the property ID, e.g. "123456789".
     /// </summary>
     public string? DefaultPropertyId { get; set; }

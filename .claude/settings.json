@@ -1,0 +1,16 @@
+{
+  "enabledMcpjsonServers": ["google-analytics"],
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [ \"$CLAUDE_CODE_REMOTE\" = \"true\" ]; then bash \"$CLAUDE_PROJECT_DIR/scripts/mcp-stdio.sh\" --prepare; fi",
+            "timeout": 600
+          }
+        ]
+      }
+    ]
+  }
+}
